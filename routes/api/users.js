@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const gravatar = require('gravatar');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const keys = require('../../config/keys');
+const passport = require('passport');
 
 //Load user model
 
@@ -36,13 +39,14 @@ router.post('/register',(req, res)=>{
             name: req.body.name,
             email: req.body.email,
             avatar,
-            password: req.body.email
+            password: req.body.password
          });
 
          bcrypt.genSalt(10, (err, salt) => {
              bcrypt.hash(newUser.password, salt, (err, hash) => {
                  if(err) throw err;
                  newUser.password = hash;
+                 console.log(hash);
                  newUser.save()
                    .then(user => res.json(user))
                    .catch(err => console.log(err));
@@ -71,17 +75,52 @@ router.post('/login', (req, res) => {
   }
 
   //Check Password
-  bcrypt.compare(password, user.password).then(isMatch => {
-      console.log(isMatch);
-      console.log(user);
+  bcrypt.compare(password, user.password)
+  .then(isMatch => {
       if(isMatch){
-          res.json({msg: 'Success'});
+         // User Matched
+         const payload = {id: user.id, name: user.name} ; //Create JWT Payload
+
+         //Sign Token
+         jwt.sign(
+             payload,
+             keys.secretOrkey,
+             {expiresIn :3600},
+             (err, token) => {
+                 res.json(
+                     {
+                      success: true,
+                      token: 'Bearer ' + token
+                     }
+                 );
+             }
+             );
+
+
+
       }else{
           return res.status(400).json({password: 'Password Incorrect'});
       }
   });
   });
 });
+
+//@route  GET api/users/current
+//@desc   Return current user
+//@access Private 
+
+router.get(
+    '/current',
+    passport.authenticate('jwt', {session: false}),
+    (req, res) => {
+        res.json({
+            id: req.user.id,
+            name: req.user.name,
+            email: req.user.email
+        });
+        }
+)
+
 
 
 module.exports = router;
